@@ -109,7 +109,7 @@
 								<div id="rating">Rating: ${reviewRating} stars</div>
 								<div id="rating"><p>Review: ${reviewText}</p></div>`;
 							userList.push(contentString);
-							// 리뷰 정보 전달 (실제 사용)
+							// 리뷰 정보 전달 (페이지에 내용 표시)
 							gen_string = gen_string + ' ' + reviewText;
 							infoString = `<div id="title"><b>${place.displayName}</b></div>
 								<div id="address">${place.formattedAddress}</div>`;
@@ -135,15 +135,16 @@
 				console.log('No results');
 			}
 		}
-		// 정의된 함수 호출 및 정상 반환 시 다음 기능 수행
+		// nearbySearch() 함수 호출 및 정상 반환 시 다음 기능 수행
 		// └ 'routes/api' 하위로 추출된 리뷰 정보 전달
 		// └ './routes/api' 도 가능? -> Java Servlet에서는 가능한데 잘 모르겠음
 		nearbySearch().then(
 			async () =>
-				await fetch('/api', { method: 'POST', body: JSON.stringify({ reviews: summarize[0] }) })
+				await fetch('/api', { method: 'POST', body: JSON.stringify({ reviews: summarize[1] }) })
 					.then((response) => response.json())
 					.then((result) => console.log(result.data[0].text))
 			// summarize[0]과 data[0]은 구글맵에서 추출한 주변 장소 정보 5개 중 1개만 테스트로 진행하기 위한 내용
+			// 1개 장소에 5개의 리뷰를 /api 로 전달함 (json)
 		);
 		loading = false;
 	});

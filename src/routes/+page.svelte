@@ -10,7 +10,8 @@
 	let loading: boolean = $state(true);
 
 	let summarize: string[] = $state([]);
-
+	let ai_result: string[] = $state([]);
+	
 	// API 장애 대비 비동기 처리 (Asynchronous)
 	// └ 불러오는 시간 동안 다른 작업을 처리하기 위함
 	onMount(async function () {
@@ -139,22 +140,43 @@
 		// └ 'routes/api' 하위로 추출된 리뷰 정보 전달
 		// └ './routes/api' 도 가능? -> Java Servlet에서는 가능한데 잘 모르겠음
 		nearbySearch().then(
-			async () =>
-				await fetch('/api', { method: 'POST', body: JSON.stringify({ reviews: summarize[1] }) })
-					.then((response) => response.json())
-					.then((result) => console.log(result.data[0].text))
+
+
+			async () => {
+				for (let index = 0; index < summarize.length; index++) {
+					call_ai(index);
+				}
+			}
 			// summarize[0]과 data[0]은 구글맵에서 추출한 주변 장소 정보 5개 중 1개만 테스트로 진행하기 위한 내용
 			// 1개 장소에 5개의 리뷰를 /api 로 전달함 (json)
 		);
-		loading = false;
 	});
-</script>
 
-<div class="h-full w-full">
+	async function call_ai(params:number) {
+		await fetch('/api', { method: 'POST', body: JSON.stringify({ reviews: summarize[params] }) })
+		.then((response) => response.json())
+		.then((result) => {console.log(result.data[0].message.content)
+			ai_result[params] = result.data[0].message.content
+			loading = false; // 추후 위치 변경
+		})
+	}
+
+</script>
+<div class="h-full w-full [&>div>h3]:text-lg [&>div>h3]:font-bold">
 	<div bind:this={mapElement} class="mx-auto h-1/2 w-10/12"></div>
 	{#if !loading}
-		{#each userList as content}
+		{#each ai_result as content, index}
 			{@html content}
 		{/each}
+		<br>
+		<hr>
+		<br>
+		{:else}
+		<div class="animate-pulse text-center">
+			loading
+		</div>
 	{/if}
+	{#each userList as content, index}
+		{@html content}
+	{/each}
 </div>

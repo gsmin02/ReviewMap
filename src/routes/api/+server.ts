@@ -23,9 +23,13 @@ export const POST: RequestHandler = async (data) => {
 		}
 	];
 
-	const response = await openai.chat.completions.create({
-		model: 'exaone-3.5-7.8b-instruct',
-		messages: messages
-	});
+	// const response = await openai.chat.completions.create({
+	// 	model: 'exaone-3.5-7.8b-instruct',
+	// 	messages: messages
+	// });
+
+	// 테스트용
+	const response = { choices: [{ message: { content: '<div><h3>요약</h3></div>' } }] };
+
 	return json({ data: response.choices });
 };

@@ -55,119 +55,117 @@
 		// nearbySearch() 함수 호출 및 정상 반환 시 다음 기능 수행
 		// └ 'routes/api' 하위로 추출된 리뷰 정보 전달
 		// └ './routes/api' 도 가능? -> Java Servlet에서는 가능한데 잘 모르겠음
-		nearbySearch(init_center).then(
-			async () => {
-				for (let index = 0; index < summarize.length; index++) {
-					call_ai(index);
-				}
-			}
-			// summarize[0]과 data[0]은 구글맵에서 추출한 주변 장소 정보 5개 중 1개만 테스트로 진행하기 위한 내용
-			// 1개 장소에 5개의 리뷰를 /api 로 전달함 (json)
-		);
+		nearbySearch(init_center);
 	});
 
 	// 타입스크립트에서 클래스를 파라미터로 활용
 	async function nearbySearch(latlng:google.maps.LatLng) {
-			//@ts-ignore
-			const { Place, SearchNearbyRankPreference } = (await google.maps.importLibrary(
-				'places'
-			)) as google.maps.PlacesLibrary;
-			const { AdvancedMarkerElement } = (await google.maps.importLibrary(
-				'marker'
-			)) as google.maps.MarkerLibrary;
+		//@ts-ignore
+		const { Place, SearchNearbyRankPreference } = (await google.maps.importLibrary(
+			'places'
+		)) as google.maps.PlacesLibrary;
+		const { AdvancedMarkerElement } = (await google.maps.importLibrary(
+			'marker'
+		)) as google.maps.MarkerLibrary;
 
-			const request = {
-				// required parameters
-				// 가져올 데이터 목록 (이름, 정형 주소, 위치, 리뷰)
-				fields: ['displayName', 'formattedAddress', 'location', 'reviews'],
-				locationRestriction: {
-					center: latlng,
-					// 반경
-					radius: 500
-				},
-				// optional parameters
-				// 가져올 분류군 : 식당
-				includedPrimaryTypes: ['restaurant'],
-				// center 기준 최대 장소 정보 : 5
-				maxResultCount: 5,
-				rankPreference: SearchNearbyRankPreference.POPULARITY,
-				language: 'ko-KR',
-				region: 'kr'
-			};
+		const request = {
+			// required parameters
+			// 가져올 데이터 목록 (이름, 정형 주소, 위치, 리뷰)
+			fields: ['displayName', 'formattedAddress', 'location', 'reviews'],
+			locationRestriction: {
+				center: latlng,
+				// 반경
+				radius: 500
+			},
+			// optional parameters
+			// 가져올 분류군 : 식당
+			includedPrimaryTypes: ['restaurant'],
+			// center 기준 최대 장소 정보 : 4
+			maxResultCount: 4,
+			rankPreference: SearchNearbyRankPreference.POPULARITY,
+			language: 'ko-KR',
+			region: 'kr'
+		};
 
-			//@ts-ignore
-			// 설정 값 전달 후 리턴값을 places 저장
-			const { places } = await Place.searchNearby(request);
+		//@ts-ignore
+		// 설정 값 전달 후 리턴값을 places 저장
+		const { places } = await Place.searchNearby(request);
 
-			if (places.length) {
-				const { LatLngBounds } = (await google.maps.importLibrary(
-					'core'
-				)) as google.maps.CoreLibrary;
-				const bounds = new LatLngBounds();
+		if (places.length) {
+			const { LatLngBounds } = (await google.maps.importLibrary(
+				'core'
+			)) as google.maps.CoreLibrary;
+			const bounds = new LatLngBounds();
 
-				// Loop through and get all the results.
-				// 반환된 주변 장소 정보 5개 각각 적용
-				places.forEach((place, index) => {
-					let infoWindow;
-					let contentValue;
-					let gen_string: string = '';
-					let infoString;
-					const markerView = new AdvancedMarkerElement({
-						map,
-						position: place.location,
-						title: place.displayName
-					});
-
-					bounds.extend(place.location as google.maps.LatLng);
-
-					// 각 장소 정보에 리뷰 내용(5개) 각각 적용
-					// └ LLM AI 리뷰 요약에 활용할 정보 추출
-					if (place.reviews && place.reviews.length > 0) {
-						place.reviews.forEach((reivew) => {
-							// Get info for the first review.
-							let reviewRating = reivew.rating;
-							let reviewText = reivew.text;
-							let authorName = reivew.authorAttribution!.displayName;
-							let authorUri = reivew.authorAttribution!.uri;
-
-							// Format the review using HTML.
-							// 추출된 정보를 쉽게 확인할 수 있도록 HTML 내용으로 변환
-							contentValue = {
-								displayName : place.displayName,
-								formattedAddress : place.formattedAddress,
-								authorUri : authorUri,
-								authorName : authorName,
-								reviewRating : reviewRating,
-								reviewText : reviewText
-							 };
-
-							userList.push(contentValue);
-							// 리뷰 정보 전달 (페이지에 내용 표시)
-							gen_string = gen_string + ' ' + reviewText;
-							infoString = `<div id="title"><b>${place.displayName}</b></div>
-								<div id="address">${place.formattedAddress}</div>`;
-						});
-					} else {
-						contentValue = {blank : 'No reviews were found for ' + place.displayName + '.'};
-					}
-
-					infoWindow = new _InfoWindow({
-						content: infoString,
-						ariaLabel: place.displayName
-					});
-					infoWindow.open({
-						anchor: markerView,
-						map
-					});
-					// 요약할 정보를 배열로 정리
-					summarize[index] = gen_string;
+			// Loop through and get all the results.
+			// 반환된 주변 장소 정보 4개 각각 적용
+			places.forEach((place, index) => {
+				let infoWindow;
+				let contentValue;
+				let gen_string: string = '';
+				let infoString;
+				const markerView = new AdvancedMarkerElement({
+					map,
+					position: place.location,
+					title: place.displayName
 				});
 
-				map?.fitBounds(bounds);
-			} else {
-				console.log('No results');
-			}
+				bounds.extend(place.location as google.maps.LatLng);
+
+				// 각 장소 정보에 리뷰 내용(4개) 각각 적용
+				// └ LLM AI 리뷰 요약에 활용할 정보 추출
+				if (place.reviews && place.reviews.length > 0) {
+					place.reviews.forEach((reivew) => {
+						// Get info for the first review.
+						let reviewRating = reivew.rating;
+						let reviewText = reivew.text;
+						let authorName = reivew.authorAttribution!.displayName;
+						let authorUri = reivew.authorAttribution!.uri;
+
+						// Format the review using HTML.
+						// 추출된 정보를 쉽게 확인할 수 있도록 HTML 내용으로 변환
+						contentValue = {
+							displayName : place.displayName,
+							formattedAddress : place.formattedAddress,
+							authorUri : authorUri,
+							authorName : authorName,
+							reviewRating : reviewRating,
+							reviewText : reviewText
+							};
+
+						userList.push(contentValue);
+						// 리뷰 정보 전달 (페이지에 내용 표시)
+						gen_string = gen_string + ' ' + reviewText;
+						infoString = `<div id="title"><b>${place.displayName}</b></div>
+							<div id="address">${place.formattedAddress}</div>`;
+					});
+				} else {
+					contentValue = {blank : 'No reviews were found for ' + place.displayName + '.'};
+				}
+
+				infoWindow = new _InfoWindow({
+					content: infoString,
+					ariaLabel: place.displayName
+				});
+				infoWindow.open({
+					anchor: markerView,
+					map
+				});
+				// 요약할 정보를 배열로 정리
+				summarize[index] = gen_string;
+			});
+
+			map?.fitBounds(bounds);
+		} else {
+			console.log('No results');
 		}
+		
+		for (let index = 0; index < summarize.length; index++) {
+			call_ai(index);
+		}
+		// summarize[0]과 data[0]은 구글맵에서 추출한 주변 장소 정보 4개 중 1개만 테스트로 진행하기 위한 내용
+		// 1개 장소에 4개의 리뷰를 /api 로 전달함 (json)
+	}
 
 	async function call_ai(params:number) {
 		await fetch('/api', { method: 'POST', body: JSON.stringify({ reviews: summarize[params] }) })
@@ -179,8 +177,8 @@
 	}
 
 </script>
-<div class="h-full w-full [&>div>div>h3]:text-lg [&>div>div>h3]:font-bold">
-	<div class="mx-auto h-1/2 w-10/12 relative">
+<div class="h-full m-4 [&>div>div>h3]:text-lg [&>div>div>h3]:font-bold">
+	<div class="mx-auto h-1/2 w-full relative">
 		<button 
 			class="bg-slate-100 border border-slate-500 bottom-3 left-1/2 z-50 p-1 rounded-md {draged ? 'absolute' : 'hidden'}"
 			onclick={() => {
@@ -193,10 +191,12 @@
 		</button>
 		<div bind:this={mapElement} class="h-full w-full"></div>
 	</div>
-	<div class="mx-auto h-1/2 w-10/12">
+	<div class="mx-auto h-1/2 w-full flex flex-wrap">
 		{#if !loading}
 			{#each ai_result as content, index}
-				{@html content}
+				<div class=" w-full sm:w-1/2 lg:w-1/4 p-4 border border-zinc-300">
+					{@html content}
+				</div>
 			{/each}
 			<br>
 			<hr>

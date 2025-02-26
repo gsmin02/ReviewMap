@@ -2,7 +2,7 @@
     let {userList}=$props();
 </script>
 
-<div class=" h-full overflow-scroll">
+<div class=" h-full overflow-y-scroll ">
     {#each userList as content, index}
         {#if !content.blank}
             <div id="title"><b>{content.displayName}</b></div>

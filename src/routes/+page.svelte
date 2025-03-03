@@ -1,13 +1,21 @@
 <script lang="ts">
-  	import ReviewList from './ReviewList.svelte';
+	import ReviewList from './ReviewList.svelte';
 	import { onMount } from 'svelte';
 	import * as googlemaps from '@googlemaps/js-api-loader';
 	const { Loader } = googlemaps;
 	import { PUBLIC_GOOGLE_MAP_API_KEY } from '$env/static/public';
+	import { maybeCoerceFloat } from 'openai/core.mjs';
 
 	let mapElement: HTMLElement;
 	// $state() 로 해당 객체를 반응형으로 변경
-	let userList: {}[] = $state([]);
+	let userList: {
+		displayName: string;
+		formattedAddress: string;
+		authorUri: string;
+		authorName: string;
+		reviewRating: number;
+		reviewText: string;
+	}[] = $state([]);
 	let loading: boolean = $state(true);
 
 	let summarize: string[] = $state([]);
@@ -15,15 +23,17 @@
 
 	let draged: boolean = $state(false);
 
-	let map : google.maps.Map | undefined = $state();
-	let _InfoWindow : typeof google.maps.InfoWindow;
+	let map: google.maps.Map | undefined = $state();
+	let _InfoWindow: typeof google.maps.InfoWindow;
 
-	let init_center : any;
-	
+	let InfoList: google.maps.InfoWindow[] = $state([]);
+	let markerList: google.maps.marker.AdvancedMarkerElement[] = $state([]);
+
+	let init_center: any;
+
 	// API 장애 대비 비동기 처리 (Asynchronous)
 	// └ 불러오는 시간 동안 다른 작업을 처리하기 위함
 	onMount(async function () {
-
 		// API Key를 통한 식별 및 생성자
 		const loader = new Loader({
 			apiKey: PUBLIC_GOOGLE_MAP_API_KEY,
@@ -46,12 +56,12 @@
 			mapId: 'f40c54c8ad07a1c9'
 		});
 
-		map.addListener("dragend", () => {
+		map.addListener('dragend', () => {
 			draged = true;
 		});
 
 		// 주변 장소 찾기 기능을 활용하기 위한 함수 정의
-		
+
 		// nearbySearch() 함수 호출 및 정상 반환 시 다음 기능 수행
 		// └ 'routes/api' 하위로 추출된 리뷰 정보 전달
 		// └ './routes/api' 도 가능? -> Java Servlet에서는 가능한데 잘 모르겠음
@@ -59,7 +69,7 @@
 	});
 
 	// 타입스크립트에서 클래스를 파라미터로 활용
-	async function nearbySearch(latlng:google.maps.LatLng) {
+	async function nearbySearch(latlng: google.maps.LatLng) {
 		//@ts-ignore
 		const { Place, SearchNearbyRankPreference } = (await google.maps.importLibrary(
 			'places'
@@ -92,9 +102,7 @@
 		const { places } = await Place.searchNearby(request);
 
 		if (places.length) {
-			const { LatLngBounds } = (await google.maps.importLibrary(
-				'core'
-			)) as google.maps.CoreLibrary;
+			const { LatLngBounds } = (await google.maps.importLibrary('core')) as google.maps.CoreLibrary;
 			const bounds = new LatLngBounds();
 
 			// Loop through and get all the results.
@@ -103,7 +111,8 @@
 				let infoWindow;
 				let contentValue;
 				let gen_string: string = '';
-				let infoString;
+				let infoName;
+				let infoAddress;
 				const markerView = new AdvancedMarkerElement({
 					map,
 					position: place.location,
@@ -125,41 +134,43 @@
 						// Format the review using HTML.
 						// 추출된 정보를 쉽게 확인할 수 있도록 HTML 내용으로 변환
 						contentValue = {
-							displayName : place.displayName,
-							formattedAddress : place.formattedAddress,
-							authorUri : authorUri,
-							authorName : authorName,
-							reviewRating : reviewRating,
-							reviewText : reviewText
-							};
+							displayName: place.displayName!,
+							formattedAddress: place.formattedAddress!,
+							authorUri: authorUri!,
+							authorName: authorName!,
+							reviewRating: reviewRating!,
+							reviewText: reviewText!
+						};
 
 						userList.push(contentValue);
 						// 리뷰 정보 전달 (페이지에 내용 표시)
 						gen_string = gen_string + ' ' + reviewText;
-						infoString = `<div id="title"><b>${place.displayName}</b></div>
-							<div id="address">${place.formattedAddress}</div>`;
 					});
+					infoName = place.displayName;
+					infoAddress = `<div>${place.formattedAddress}</div>`;
 				} else {
-					contentValue = {blank : 'No reviews were found for ' + place.displayName + '.'};
+					contentValue = { blank: 'No reviews were found for ' + place.displayName + '.' };
 				}
 
 				infoWindow = new _InfoWindow({
-					content: infoString,
+					headerContent: infoName,
+					content: infoAddress,
 					ariaLabel: place.displayName
 				});
+				InfoList.push(infoWindow);
 				infoWindow.open({
 					anchor: markerView,
 					map
 				});
+				markerList.push(markerView);
 				// 요약할 정보를 배열로 정리
 				summarize[index] = gen_string;
 			});
-
 			map?.fitBounds(bounds);
 		} else {
 			console.log('No results');
 		}
-		
+
 		for (let index = 0; index < summarize.length; index++) {
 			call_ai(index);
 		}
@@ -167,47 +178,57 @@
 		// 1개 장소에 4개의 리뷰를 /api 로 전달함 (json)
 	}
 
-	async function call_ai(params:number) {
+	async function call_ai(params: number) {
 		await fetch('/api', { method: 'POST', body: JSON.stringify({ reviews: summarize[params] }) })
-		.then((response) => response.json())
-		.then((result) => {console.log(result.data[0].message.content)
-			ai_result[params] = result.data[0].message.content
-			loading = false; // 추후 위치 변경
-		})
+			.then((response) => response.json())
+			.then((result) => {
+				console.log(result.data[0].message.content);
+				ai_result[params] = result.data[0].message.content;
+				loading = false; // 추후 위치 변경
+			});
 	}
-
 </script>
-<div class="h-full m-4 [&>div>div>h3]:text-lg [&>div>div>h3]:font-bold">
-	<div class="mx-auto h-1/2 w-full relative">
-		<button 
-			class="bg-slate-100 border border-slate-500 bottom-3 left-1/2 z-50 p-1 rounded-md {draged ? 'absolute' : 'hidden'}"
+
+<div class="h-full [&>div>div>div>h3]:text-lg [&>div>div>div>h3]:font-bold">
+	<div class="relative mx-auto h-1/2 w-full text-zinc-950">
+		<button
+			class=" bottom-3 left-1/2 z-50 -translate-x-1/2 rounded-md border border-slate-500 bg-slate-100 p-1 {draged
+				? 'absolute'
+				: 'hidden'}"
 			onclick={() => {
 				draged = false;
 				console.log(map?.getCenter()?.lat(), map?.getCenter()?.lng());
 				userList = [];
 				nearbySearch(map?.getCenter()!);
+				InfoList.forEach((info) => {
+					info.close();
+				});
+				InfoList = [];
+				markerList.forEach((marker) => {
+					marker.map = null;
+				});
+				markerList = [];
 			}}
 			>현 위치 검색
 		</button>
 		<div bind:this={mapElement} class="h-full w-full"></div>
 	</div>
-	<div class="mx-auto h-1/2 w-full flex flex-wrap">
+	<div class="mx-auto flex h-fit w-full flex-wrap p-4">
 		{#if !loading}
 			{#each ai_result as content, index}
-				<div class=" w-full sm:w-1/2 lg:w-1/4 p-4 border border-zinc-300">
+				<div class=" w-full rounded-sm border border-zinc-300 p-4 sm:w-1/2 lg:w-1/4">
+					<h2 class=" mb-2 text-xl font-bold">{userList[index * 5].displayName}</h2>
 					{@html content}
 				</div>
 			{/each}
-			<br>
-			<hr>
-			<br>
-			{:else}
-			<div class="animate-pulse text-center">
-				loading
-			</div>
+			<br />
+			<hr />
+			<br />
+		{:else}
+			<div class="animate-pulse text-center">loading</div>
 		{/if}
-		
-		<ReviewList {userList}></ReviewList>
-		
+
+		<!-- <ReviewList {userList}></ReviewList> -->
 	</div>
+	<div class="flex items-center justify-center pb-4">© 2025. 이유찬, 구승민 All rights</div>
 </div>

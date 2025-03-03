@@ -10,7 +10,7 @@ const openai = new OpenAI({
 export const POST: RequestHandler = async (data) => {
 	let param = await data.request.json();
 
-	const inpout =
+	const input =
 		"다음은 리뷰 내용. 리뷰를 입력된 순서대로 요약, '맛', '위생', '친절도', '분위기'로 나누어 정리. 리뷰의 본문 내용만 참고. 객관적인 내용 요약. 한글만 작성. 이모티콘 사용 금지. 답변 형식은 MD가 아닌 HTML <div> 태그로 시작. 각 항목은 <h3> 태그만 작성. 지정 태그 이외 모든 태그 추가 적용 금지(<strong> 절대 금지). 마지막 </div>로 마무리.'" +
 		param.reviews +
 		"'";
@@ -19,7 +19,7 @@ export const POST: RequestHandler = async (data) => {
 		{ role: 'system', content: '당신은 도움이 되는 조수입니다.' },
 		{
 			role: 'user',
-			content: inpout
+			content: input
 		}
 	];
 
